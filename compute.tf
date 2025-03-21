@@ -67,38 +67,39 @@ resource "aws_autoscaling_policy" "scale-down" {
   policy_type            = "SimpleScaling"
 }
 
-
-resource "aws_cloudwatch_metric_alarm" "cpu_high" {
-  alarm_name          = "cpu-high-alarm"
+resource "aws_cloudwatch_metric_alarm" "alb_request_count_high" {
+  alarm_name          = "alb-request-count-high"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
+  metric_name         = "RequestCountPerTarget"
+  namespace           = "AWS/ApplicationELB"
   period              = 120
-  statistic           = "Average"
-  threshold           = 70
-  alarm_description   = "Alarm when CPU utilization exceeds 70%"
+  statistic           = "Sum"
+  threshold           = 200
+  alarm_description   = "Scale up when requests per target exceed 200"
   alarm_actions       = [aws_autoscaling_policy.scale-up.arn]
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.lab-autoscaling.name
+    LoadBalancer = aws_lb.lab-alb.arn_suffix
+    TargetGroup  = aws_lb_target_group.lab-alb-tg.arn_suffix
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "cpu_low" {
-  alarm_name          = "cpu-low-alarm"
+resource "aws_cloudwatch_metric_alarm" "alb_request_count_low" {
+  alarm_name          = "alb-request-count-low"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
+  metric_name         = "RequestCountPerTarget"
+  namespace           = "AWS/ApplicationELB"
   period              = 120
-  statistic           = "Average"
-  threshold           = 30
-  alarm_description   = "Alarm when CPU utilization falls below 30%"
+  statistic           = "Sum"
+  threshold           = 50
+  alarm_description   = "Scale down when requests per target is below 50"
   alarm_actions       = [aws_autoscaling_policy.scale-down.arn]
 
   dimensions = {
-    AutoScalingGroupName = aws_autoscaling_group.lab-autoscaling.name
+    LoadBalancer = aws_lb.lab-alb.arn_suffix
+    TargetGroup  = aws_lb_target_group.lab-alb-tg.arn_suffix
   }
 }
 

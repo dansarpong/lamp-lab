@@ -14,6 +14,17 @@ sudo dpkg -i -E ./amazon-cloudwatch-agent.deb
 # Create a CloudWatch Agent configuration file
 cat <<EOF | sudo tee /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
 {
+  "metrics": {
+    "metrics_collected": {
+      "apache": {
+        "status_url": "http://localhost/server-status?auto",
+        "metrics_collection_interval": 60,
+        "append_dimensions": {
+          "AutoScalingGroupName": "\$${aws:AutoScalingGroupName}"
+        }
+      }
+    }
+  },
   "logs": {
     "logs_collected": {
       "files": {
@@ -65,6 +76,7 @@ echo "<VirtualHost *:80>
 
 # Enable the site
 sudo a2dissite 000-default.conf
+sudo a2enmod status
 sudo a2ensite todo-app
 sudo service apache2 restart
 

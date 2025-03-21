@@ -17,12 +17,12 @@ resource "aws_cloudwatch_log_group" "rds_mysql_slowquery" {
 }
 
 # EC2
-# resource "aws_cloudwatch_log_group" "ec2_apache_error" {
-#   name              = "EC2-ApacheError"
-#   retention_in_days = 7
-# }
+resource "aws_cloudwatch_log_group" "ec2_apache_error" {
+  name              = "EC2-ApacheError"
+  retention_in_days = 7
+}
 
-# resource "aws_cloudwatch_log_group" "ec2_apache_access" {
-#   name              = "EC2-ApacheAccess"
-#   retention_in_days = 7
-# }
+resource "aws_cloudwatch_log_group" "ec2_apache_access" {
+  name              = "EC2-ApacheAccess"
+  retention_in_days = 7
+}

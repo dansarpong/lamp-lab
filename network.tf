@@ -15,10 +15,7 @@ resource "aws_internet_gateway" "lab-igw" {
   }
 }
 
-
-# Subnets
-
-# Public
+# Public Subnets
 resource "aws_subnet" "lab-public-a" {
   vpc_id            = aws_vpc.lab-vpc.id
   cidr_block        = "123.0.1.0/24"
@@ -62,7 +59,7 @@ resource "aws_route_table_association" "lab_public_b_assoc" {
   route_table_id = aws_route_table.lab-public.id
 }
 
-# Private
+# Private Subnets
 resource "aws_subnet" "lab-private-a" {
   vpc_id            = aws_vpc.lab-vpc.id
   cidr_block        = "123.0.2.0/24"

@@ -1,5 +1,5 @@
 
-# Launch Template and Autoscaling Group
+# Launch Template
 resource "aws_launch_template" "linux-server" {
   name          = "linux-server"
   image_id      = data.aws_ami.ubuntu.id
@@ -17,9 +17,9 @@ resource "aws_launch_template" "linux-server" {
     security_groups             = [aws_security_group.lab-linux-sg.id]
   }
 
-  # iam_instance_profile {
-  #   name = aws_iam_instance_profile.ec2_cloudwatch_instance_profile.name
-  # }
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_cloudwatch_instance_profile.name
+  }
 
   tag_specifications {
     resource_type = "instance"
@@ -30,6 +30,7 @@ resource "aws_launch_template" "linux-server" {
   }
 }
 
+# Autoscaling Group
 resource "aws_autoscaling_group" "lab-autoscaling" {
   name             = "lab-autoscaling"
   desired_capacity = 1
@@ -47,7 +48,7 @@ resource "aws_autoscaling_group" "lab-autoscaling" {
   }
 }
 
-# Autoscaling Policies with Cloudwatch
+# Autoscaling Policies with Cloudwatch Alarms
 resource "aws_autoscaling_policy" "scale-up" {
   name                   = "scale-up-policy"
   autoscaling_group_name = aws_autoscaling_group.lab-autoscaling.name
@@ -101,7 +102,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   }
 }
 
-# Load Balancer
+# Application Load Balancer
 resource "aws_lb" "lab-alb" {
   name               = "lab-alb"
   internal           = false
@@ -131,6 +132,6 @@ resource "aws_lb_target_group" "lab-alb-tg" {
     port     = 80
     protocol = "HTTP"
     timeout  = 5
-    interval = 10
+    interval = 100
   }
 }

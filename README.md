@@ -70,7 +70,15 @@ To destroy the resources created by Terraform, run:
 terraform destroy
 ```
 
-Requirements for Scalability, Security, and Availability
+Then run the following command to delete the secret:
+
+```sh
+aws secretsmanager delete-secret \
+    --secret-id db-creds-v1 \
+    --recovery-window-in-days 7
+```
+
+### Requirements for Scalability, Security, and Availability
 
 - Scalability
     1. Autoscaling Group (ASG) scales from 1 to 4 t3.micro instances based on CPU utilization (scale up at >70%, down at <30%)
@@ -85,7 +93,7 @@ Requirements for Scalability, Security, and Availability
     1. RDS automated backups retained for 5 days with a daily backup window
     1. ALB performs HTTP health checks on instances to ensure they are healthy
 
-Expected Traffic Loads, Performance Needs and Security Levels
+### Expected Traffic Loads, Performance Needs and Security Levels
 
 - Traffic Loads
     1. Designed for light to moderate traffic (e.g., hundreds of users)

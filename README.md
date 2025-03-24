@@ -74,6 +74,7 @@ Then run the following command to delete the secret:
 
 ```sh
 aws secretsmanager delete-secret \
+    --profile <profile_name> \
     --secret-id db-creds-v1 \
     --recovery-window-in-days 7
 ```

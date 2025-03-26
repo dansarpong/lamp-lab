@@ -1,107 +1,74 @@
+# ECS Cluster
+resource "aws_ecs_cluster" "lamp-cluster" {
+  name = "lamp-cluster"
+}
 
-# Launch Template
-resource "aws_launch_template" "linux-server" {
-  name          = "linux-server"
-  image_id      = data.aws_ami.ubuntu.id
-  instance_type = "t3.micro"
-  user_data = base64encode(templatefile("user-data.sh", {
-    db_user     = aws_db_instance.lab-mysql.username
-    db_password = aws_db_instance.lab-mysql.password
-    db_host     = aws_db_instance.lab-mysql.endpoint
-    db_port     = aws_db_instance.lab-mysql.port
-  }))
-  update_default_version = true
+# ECS Task Definition
+resource "aws_ecs_task_definition" "lamp-task" {
+  family                   = "lamp-task"
+  network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = 512
+  memory                   = 1024
+  execution_role_arn       = aws_iam_role.ecs-task-execution-role.arn
+  task_role_arn            = aws_iam_role.ecs-task-role.arn
 
-  network_interfaces {
-    associate_public_ip_address = true
-    security_groups             = [aws_security_group.lab-linux-sg.id]
-  }
-
-  iam_instance_profile {
-    name = aws_iam_instance_profile.ec2_cloudwatch_instance_profile.name
-  }
-
-  tag_specifications {
-    resource_type = "instance"
-
-    tags = {
-      Name = "web-server"
+  container_definitions = jsonencode([
+    {
+      name      = "php-apache",
+      image     = var.image
+      essential = true,
+      portMappings = [
+        {
+          containerPort = 80,
+          hostPort      = 80,
+          protocol      = "tcp"
+        }
+      ],
+      environment = [
+        { name = "DATABASE_USER", value = aws_db_instance.lab-mysql.username },
+        { name = "DATABASE_HOST", value = aws_db_instance.lab-mysql.endpoint },
+        { name = "DATABASE_PORT", value = tostring(aws_db_instance.lab-mysql.port) },
+        { name = "DATABASE_NAME", value = "todo" }
+      ],
+      secrets = [
+        { name = "DATABASE_PASSWORD", valueFrom = "${data.aws_secretsmanager_secret_version.db_creds.arn}:password::" }
+      ],
+      logConfiguration = {
+        logDriver = "awslogs",
+        options = {
+          "awslogs-group"  = "ECS-Logs",
+          "awslogs-region" = var.region,
+          "awslogs-stream-prefix" = "ecs"
+        }
+      }
     }
+  ])
+}
+
+# ECS Service
+resource "aws_ecs_service" "lamp-service" {
+  name            = "lamp-service"
+  cluster         = aws_ecs_cluster.lamp-cluster.id
+  task_definition = aws_ecs_task_definition.lamp-task.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+
+  network_configuration {
+    subnets          = [aws_subnet.lab-public-a.id, aws_subnet.lab-public-b.id]
+    security_groups  = [aws_security_group.ecs-sg.id]
+    assign_public_ip = true
   }
-}
 
-# Autoscaling Group
-resource "aws_autoscaling_group" "lab-autoscaling" {
-  name             = "lab-autoscaling"
-  desired_capacity = 1
-  min_size         = 1
-  max_size         = 4
-  vpc_zone_identifier = [
-    aws_subnet.lab-public-a.id,
-    aws_subnet.lab-public-b.id,
-  ]
-  target_group_arns = [aws_lb_target_group.lab-alb-tg.arn]
-
-  launch_template {
-    id      = aws_launch_template.linux-server.id
-    version = "$Latest"
+  load_balancer {
+    target_group_arn = aws_lb_target_group.lab-alb-tg.arn
+    container_name   = "php-app"
+    container_port   = 80
   }
+
+  depends_on = [aws_lb_listener.lab-alb-listener]
 }
 
-# Autoscaling Policies with Cloudwatch Alarms
-resource "aws_autoscaling_policy" "scale-up" {
-  name                   = "scale-up-policy"
-  autoscaling_group_name = aws_autoscaling_group.lab-autoscaling.name
-  adjustment_type        = "ChangeInCapacity"
-  scaling_adjustment     = 1
-  cooldown               = 300
-  policy_type            = "SimpleScaling"
-}
-
-resource "aws_autoscaling_policy" "scale-down" {
-  name                   = "scale-down-policy"
-  autoscaling_group_name = aws_autoscaling_group.lab-autoscaling.name
-  adjustment_type        = "ChangeInCapacity"
-  scaling_adjustment     = -1
-  cooldown               = 300
-  policy_type            = "SimpleScaling"
-}
-
-resource "aws_cloudwatch_metric_alarm" "alb_request_count_high" {
-  alarm_name          = "alb-request-count-high"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "RequestCountPerTarget"
-  namespace           = "AWS/ApplicationELB"
-  period              = 120
-  statistic           = "Sum"
-  threshold           = 200
-  alarm_description   = "Scale up when requests per target exceed 200"
-  alarm_actions       = [aws_autoscaling_policy.scale-up.arn]
-
-  dimensions = {
-    LoadBalancer = aws_lb.lab-alb.arn_suffix
-    TargetGroup  = aws_lb_target_group.lab-alb-tg.arn_suffix
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "alb_request_count_low" {
-  alarm_name          = "alb-request-count-low"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "RequestCountPerTarget"
-  namespace           = "AWS/ApplicationELB"
-  period              = 120
-  statistic           = "Sum"
-  threshold           = 50
-  alarm_description   = "Scale down when requests per target is below 50"
-  alarm_actions       = [aws_autoscaling_policy.scale-down.arn]
-
-  dimensions = {
-    LoadBalancer = aws_lb.lab-alb.arn_suffix
-    TargetGroup  = aws_lb_target_group.lab-alb-tg.arn_suffix
-  }
-}
 
 # Application Load Balancer
 resource "aws_lb" "lab-alb" {
@@ -128,6 +95,7 @@ resource "aws_lb_target_group" "lab-alb-tg" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.lab-vpc.id
+  target_type = "ip"
 
   health_check {
     port     = 80

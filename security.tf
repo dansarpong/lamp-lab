@@ -1,47 +1,34 @@
 # Security Groups
 
-# Linux
-resource "aws_security_group" "lab-linux-sg" {
-  name        = "lab-linux-sg"
-  description = "Linux SG"
+# ECS
+resource "aws_security_group" "ecs-sg" {
+  name        = "ecs-sg"
+  description = "ECS SG"
   vpc_id      = aws_vpc.lab-vpc.id
 
   tags = {
-    Name = "lab-linux-sg"
+    Name = "ecs-sg"
   }
 }
 
-resource "aws_vpc_security_group_ingress_rule" "limit_ssh" {
+resource "aws_vpc_security_group_ingress_rule" "ecs_allow_alb" {
   lifecycle {
     create_before_destroy = true
   }
 
-  security_group_id = aws_security_group.lab-linux-sg.id
-  ip_protocol       = "tcp"
-  from_port         = 22
-  to_port           = 22
-
-  prefix_list_id = data.aws_ec2_managed_prefix_list.instance_connect.id
-}
-
-resource "aws_vpc_security_group_ingress_rule" "linux_allow_alb" {
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  security_group_id            = aws_security_group.lab-linux-sg.id
+  security_group_id            = aws_security_group.ecs-sg.id
   ip_protocol                  = "tcp"
   from_port                    = 80
   to_port                      = 80
   referenced_security_group_id = aws_security_group.lab-alb-sg.id
 }
 
-resource "aws_vpc_security_group_egress_rule" "linux_allow_out" {
+resource "aws_vpc_security_group_egress_rule" "ecs_allow_out" {
   lifecycle {
     create_before_destroy = true
   }
 
-  security_group_id = aws_security_group.lab-linux-sg.id
+  security_group_id = aws_security_group.ecs-sg.id
   ip_protocol       = "-1"
   cidr_ipv4         = "0.0.0.0/0"
 }
@@ -57,7 +44,7 @@ resource "aws_security_group" "lab-mysql-sg" {
   }
 }
 
-resource "aws_vpc_security_group_ingress_rule" "mysql_allow_linux" {
+resource "aws_vpc_security_group_ingress_rule" "mysql_allow_ecs" {
   lifecycle {
     create_before_destroy = true
   }
@@ -66,7 +53,7 @@ resource "aws_vpc_security_group_ingress_rule" "mysql_allow_linux" {
   ip_protocol                  = "tcp"
   from_port                    = 3306
   to_port                      = 3306
-  referenced_security_group_id = aws_security_group.lab-linux-sg.id
+  referenced_security_group_id = aws_security_group.ecs-sg.id
 }
 
 resource "aws_vpc_security_group_egress_rule" "mysql_allow_out" {
@@ -102,39 +89,53 @@ resource "aws_vpc_security_group_ingress_rule" "alb_allow_http" {
   cidr_ipv4         = "0.0.0.0/0"
 }
 
-resource "aws_vpc_security_group_egress_rule" "alb_allow_linux" {
+resource "aws_vpc_security_group_egress_rule" "alb_allow_ecs" {
   lifecycle {
     create_before_destroy = true
   }
 
   security_group_id            = aws_security_group.lab-alb-sg.id
   ip_protocol                  = "-1"
-  referenced_security_group_id = aws_security_group.lab-linux-sg.id
+  referenced_security_group_id = aws_security_group.ecs-sg.id
 }
 
 
-# IAM role
-resource "aws_iam_role" "ec2_cloudwatch_role" {
-  name = "ec2-cloudwatch-role"
+# ECS IAM Roles
+resource "aws_iam_role" "ecs-task-execution-role" {
+  name = "ecs-task-execution-role"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17"
+    Version = "2012-10-17",
     Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
-      Action    = "sts:AssumeRole"
+      Effect = "Allow",
+      Principal = { Service = "ecs-tasks.amazonaws.com" },
+      Action = "sts:AssumeRole"
     }]
   })
 }
 
-# Instance Profile
-resource "aws_iam_role_policy_attachment" "ec2_cloudwatch_policy" {
-  role       = aws_iam_role.ec2_cloudwatch_role.name
+resource "aws_iam_role_policy_attachment" "ecs-task-execution-role-policy" {
+  role       = aws_iam_role.ecs-task-execution-role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_secrets_manager_policy" {
+  role       = aws_iam_role.ecs-task-execution-role.name
+  policy_arn = "arn:aws:iam::aws:policy/SecretsManagerReadWrite"
+}
+
+resource "aws_iam_role" "ecs-task-role" {
+  name = "ecs-task-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [{
+      Effect = "Allow",
+      Principal = { Service = "ecs-tasks.amazonaws.com" },
+      Action = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "cloudwatch_agent_policy" {
+  role       = aws_iam_role.ecs-task-role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
 }
-
-resource "aws_iam_instance_profile" "ec2_cloudwatch_instance_profile" {
-  name = "ec2-cloudwatch-instance-profile"
-  role = aws_iam_role.ec2_cloudwatch_role.name
-}
-
-

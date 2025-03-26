@@ -15,7 +15,7 @@ resource "aws_ecs_task_definition" "lamp-task" {
 
   container_definitions = jsonencode([
     {
-      name      = "php-apache",
+      name      = "php-app",
       image     = var.image
       essential = true,
       portMappings = [
@@ -102,5 +102,89 @@ resource "aws_lb_target_group" "lab-alb-tg" {
     protocol = "HTTP"
     timeout  = 5
     interval = 100
+  }
+}
+
+
+# ECS Auto Scaling
+resource "aws_appautoscaling_target" "ecs-target" {
+  max_capacity       = 4
+  min_capacity       = 1
+  resource_id        = "service/${aws_ecs_cluster.lamp-cluster.name}/${aws_ecs_service.lamp-service.name}"
+  scalable_dimension = "ecs:service:DesiredCount"
+  service_namespace  = "ecs"
+}
+
+resource "aws_appautoscaling_policy" "ecs-scale-up" {
+  name               = "ecs-scale-up"
+  policy_type        = "StepScaling"
+  resource_id        = aws_appautoscaling_target.ecs-target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs-target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs-target.service_namespace
+
+  step_scaling_policy_configuration {
+    adjustment_type         = "ChangeInCapacity"
+    cooldown                = 300
+    metric_aggregation_type = "Average"
+
+    step_adjustment {
+      scaling_adjustment = 1
+      metric_interval_lower_bound = 0
+    }
+  }
+}
+
+resource "aws_appautoscaling_policy" "ecs-scale-down" {
+  name               = "ecs-scale-down"
+  policy_type        = "StepScaling"
+  resource_id        = aws_appautoscaling_target.ecs-target.resource_id
+  scalable_dimension = aws_appautoscaling_target.ecs-target.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.ecs-target.service_namespace
+
+  step_scaling_policy_configuration {
+    adjustment_type         = "ChangeInCapacity"
+    cooldown                = 300
+    metric_aggregation_type = "Average"
+
+    step_adjustment {
+      scaling_adjustment = -1
+      metric_interval_upper_bound = 0
+    }
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "alb-request-count-high" {
+  alarm_name          = "alb-request-count-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "RequestCountPerTarget"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 200
+  alarm_description   = "Scale up when requests per target exceed 200"
+  alarm_actions       = [aws_appautoscaling_policy.ecs-scale-up.arn]
+
+  dimensions = {
+    LoadBalancer = aws_lb.lab-alb.arn_suffix
+    TargetGroup  = aws_lb_target_group.lab-alb-tg.arn_suffix
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "alb-request-count-low" {
+  alarm_name          = "alb-request-count-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "RequestCountPerTarget"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Sum"
+  threshold           = 50
+  alarm_description   = "Scale down when requests per target is below 50"
+  alarm_actions       = [aws_appautoscaling_policy.ecs-scale-down.arn]
+
+  dimensions = {
+    LoadBalancer = aws_lb.lab-alb.arn_suffix
+    TargetGroup  = aws_lb_target_group.lab-alb-tg.arn_suffix
   }
 }

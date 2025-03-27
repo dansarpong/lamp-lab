@@ -20,6 +20,6 @@ resource "aws_db_instance" "lab-mysql" {
   maintenance_window  = "sun:03:00-sun:04:00"
   backup_window       = "01:00-02:00"
 
-  enabled_cloudwatch_logs_exports = [ "error", "general", "slowquery" ]
+  enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 }
 

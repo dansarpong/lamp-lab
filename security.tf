@@ -100,15 +100,17 @@ resource "aws_vpc_security_group_egress_rule" "alb_allow_ecs" {
 }
 
 
-# ECS IAM Roles
+# IAM Roles
+
+# ECS Task Execution Role
 resource "aws_iam_role" "ecs-task-execution-role" {
   name = "ecs-task-execution-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "ecs-tasks.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -123,14 +125,15 @@ resource "aws_iam_role_policy_attachment" "ecs_secrets_manager_policy" {
   policy_arn = "arn:aws:iam::aws:policy/SecretsManagerReadWrite"
 }
 
+# ECS Task Role
 resource "aws_iam_role" "ecs-task-role" {
   name = "ecs-task-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "ecs-tasks.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
@@ -138,4 +141,40 @@ resource "aws_iam_role" "ecs-task-role" {
 resource "aws_iam_role_policy_attachment" "cloudwatch_agent_policy" {
   role       = aws_iam_role.ecs-task-role.name
   policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
+# CloudWatch
+resource "aws_iam_role" "cloudwatch-sns-role" {
+  name = "lab-cloudwatch-sns-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudwatch.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "cloudwatch-sns-policy" {
+  name = "lab-cloudwatch-sns-policy"
+  role = aws_iam_role.cloudwatch-sns-role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "sns:Publish"
+        ]
+        Effect   = "Allow"
+        Resource = aws_sns_topic.cloudwatch-alarms.arn
+      }
+    ]
+  })
 }

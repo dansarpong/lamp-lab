@@ -37,8 +37,8 @@ resource "aws_ecs_task_definition" "lamp-task" {
       logConfiguration = {
         logDriver = "awslogs",
         options = {
-          "awslogs-group"  = "ECS-Logs",
-          "awslogs-region" = var.region,
+          "awslogs-group"         = "ecs_logs"
+          "awslogs-region"        = var.region,
           "awslogs-stream-prefix" = "ecs"
         }
       }
@@ -91,10 +91,10 @@ resource "aws_lb_listener" "lab-alb-listener" {
 }
 
 resource "aws_lb_target_group" "lab-alb-tg" {
-  name     = "lab-alb-tg"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.lab-vpc.id
+  name        = "lab-alb-tg"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = aws_vpc.lab-vpc.id
   target_type = "ip"
 
   health_check {
@@ -128,7 +128,7 @@ resource "aws_appautoscaling_policy" "ecs-scale-up" {
     metric_aggregation_type = "Average"
 
     step_adjustment {
-      scaling_adjustment = 1
+      scaling_adjustment          = 1
       metric_interval_lower_bound = 0
     }
   }
@@ -147,44 +147,8 @@ resource "aws_appautoscaling_policy" "ecs-scale-down" {
     metric_aggregation_type = "Average"
 
     step_adjustment {
-      scaling_adjustment = -1
+      scaling_adjustment          = -1
       metric_interval_upper_bound = 0
     }
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "alb-request-count-high" {
-  alarm_name          = "alb-request-count-high"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "RequestCountPerTarget"
-  namespace           = "AWS/ApplicationELB"
-  period              = 60
-  statistic           = "Sum"
-  threshold           = 200
-  alarm_description   = "Scale up when requests per target exceed 200"
-  alarm_actions       = [aws_appautoscaling_policy.ecs-scale-up.arn]
-
-  dimensions = {
-    LoadBalancer = aws_lb.lab-alb.arn_suffix
-    TargetGroup  = aws_lb_target_group.lab-alb-tg.arn_suffix
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "alb-request-count-low" {
-  alarm_name          = "alb-request-count-low"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "RequestCountPerTarget"
-  namespace           = "AWS/ApplicationELB"
-  period              = 60
-  statistic           = "Sum"
-  threshold           = 50
-  alarm_description   = "Scale down when requests per target is below 50"
-  alarm_actions       = [aws_appautoscaling_policy.ecs-scale-down.arn]
-
-  dimensions = {
-    LoadBalancer = aws_lb.lab-alb.arn_suffix
-    TargetGroup  = aws_lb_target_group.lab-alb-tg.arn_suffix
   }
 }

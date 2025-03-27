@@ -3,13 +3,15 @@
 
 This project contains Terraform code to deploy a simple LAMP (Linux, Apache, MySQL, PHP) server on AWS.
 
-![LAMP Server Diagram](./LampStack.drawio.png)
+![LAMP Server Diagram](./diagrams/LampStack.drawio.png)
 
 ## Prerequisites
 
 - Terraform installed on your local machine
 - AWS account with appropriate permissions
 - AWS CLI configured with your credentials
+- Docker installed and configured (login) on your local machine
+- `jq` installed on your local machine (`sudo apt-get install jq` on Debian/Ubuntu or `brew install jq` on macOS) to run the scripts
 
 ## Deployment Steps
 
@@ -20,89 +22,73 @@ This project contains Terraform code to deploy a simple LAMP (Linux, Apache, MyS
     cd lamp-lab
     ```
 
-1. **Set the DB credentials:**
+1. **Make the `deploy.sh` script executable:**
 
     ```sh
-    aws secretsmanager create-secret \
-    --profile <profile_name> \
-    --name db-creds-v1 \
-    --description "Credentials for my LAMP stack DB" \
-    --secret-string '{"username": "user", "password": "pass"}' \
-    --tags Key=Lab,Value=LAMP
+    chmod +x deploy.sh
     ```
 
-1. **Initialize Terraform:**
+1. **Modify the environment variables in the `deploy.sh` script:**
+
+    - `AWS_PROFILE`: Your AWS CLI profile name
+    - `AWS_REGION`: The AWS region to deploy the resources
+    - `EMAIL`: Your email address (for SNS notifications)
+    - `DB_USER`: The username for the MySQL database
+    - `DB_PASSWORD`: The password for the MySQL database
+    - `DB_CREDS_SECRET_NAME`: The name of the AWS Secrets Manager secret to store the database credentials
+    - `ECR_NAME`: The name of the ECR repository to store the Docker image
+
+1. **Run the `deploy.sh` script and wait for the deployment to complete:**
 
     ```sh
-    terraform init
+    source deploy.sh
     ```
 
-1. **Set the AWS credentials as environment variables if not already set in default profile:**
+1. **Confirm SNS Subscription:**
 
-    ```sh
-    export AWS_PROFILE=<profile_name>
-    ```
-
-1. **Plan the deployment:**
-
-    ```sh
-    terraform plan
-    ```
-
-1. **Apply the deployment:**
-
-    ```sh
-    terraform apply
-    ```
-
-1. **Confirm the deployment:**
-    - Type `yes` when prompted to confirm the deployment.
+    After the deployment is complete, you may receive an email from AWS SNS to confirm your subscription. Click the link in the email to confirm your subscription before you can receive notifications.
 
 ## Outputs
 
 After the deployment is complete, Terraform will output the public IP address of the LAMP server. You can use this IP address to access the server via a web browser after a few minutes.
 
-## Cleanup
-
-To destroy the resources created by Terraform, run:
-
-```sh
-terraform destroy
-```
-
-Then run the following command to delete the secret:
-
-```sh
-aws secretsmanager delete-secret \
-    --profile <profile_name> \
-    --secret-id db-creds-v1 \
-    --recovery-window-in-days 7
-```
-
 ### Requirements for Scalability, Security, and Availability
 
 - Scalability
-    1. Autoscaling Group (ASG) scales from 1 to 4 t3.micro instances based on CPU utilization (scale up at >70%, down at <30%)
-    1. Application Load Balancer distributes traffic across instances in multiple Availability Zones
+    1. Autoscaling Group (ASG) scales from 1 to 4 ECS tasks based on Number of requests made to the ALB (scale up at >200, down at <50)
+    1. Application Load Balancer distributes traffic across ECS Tasks in multiple Availability Zones
 - Security
     1. RDS is in private subnets, not publicly accessible, and encrypted at rest
-    1. EC2 instances are in public subnets but restricted via security groups (SSH limited to EC2 Instance Connect, HTTP limited to ALB).
+    1. ECS tasks are in public subnets but restricted via security groups (HTTP limited to ALB).
     1. Database credentials are stored in AWS Secrets Manager
 - Availability
     1. RDS uses Multi-AZ for automatic failover
-    1. EC2 instances and ALB span two Availability Zones for availability
+    1. ECS tasks and ALB span two Availability Zones for availability
     1. RDS automated backups retained for 5 days with a daily backup window
-    1. ALB performs HTTP health checks on instances to ensure they are healthy
+    1. ALB performs HTTP health checks on tasks to ensure they are healthy
 
 ### Expected Traffic Loads, Performance Needs and Security Levels
 
 - Traffic Loads
     1. Designed for light to moderate traffic (e.g., hundreds of users)
-    1. Autoscaling Group can handle increased traffic by adding more instances
+    1. Autoscaling Group can handle increased traffic by adding more tasks
 - Performance Needs
-    1. 'db.t3.micro' instances are suitable for light workloads
-    1. ALB optimizes request routing to healthy instances
+    1. 'db.t3.micro' db instances are suitable for light workloads
+    1. ALB optimizes request routing to healthy tasks
 - Security Levels
     1. RDS is encrypted at rest and not publicly accessible
-    1. EC2 instances are secured via security groups and SSH access is restricted
+    1. ECS tasks are secured via security groups
     1. Database credentials are stored in AWS Secrets Manager
+
+### Simple Representation of the Infrastructure
+
+![Infrastructure Diagram](./diagrams/LampStack-simplified.png)
+
+## Cleanup
+
+To destroy the resources, make the `destroy.sh` script executable and run it:
+
+```sh
+chmod +x destroy.sh
+source destroy.sh
+```

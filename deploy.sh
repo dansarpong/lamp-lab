@@ -34,6 +34,7 @@ touch $STATUS_FILE
 # Step 1: Create DB credentials secret
 if ! is_done "DB_SECRET_CREATED"; then
     echo "Creating DB credentials secret..."
+
     aws secretsmanager create-secret \
         --profile $AWS_PROFILE \
         --name $DB_CREDS_SECRET_NAME \
@@ -50,6 +51,7 @@ fi
 # Step 2: Create ECR repository
 if ! is_done "ECR_CREATED"; then
     echo "Creating ECR repository..."
+
     ECR_RESPONSE=$(aws ecr-public create-repository \
         --profile $AWS_PROFILE \
         --region us-east-1 \
@@ -57,7 +59,7 @@ if ! is_done "ECR_CREATED"; then
         --tags Key=Lab,Value=LAMP)
 
     # Extract repository URI
-    REPOSITORY_URI=$(echo $ECR_RESPONSE | jq -r '.repository.repositoryUri')
+    export REPOSITORY_URI=$(echo $ECR_RESPONSE | jq -r '.repository.repositoryUri')
 
     if [ -z "$REPOSITORY_URI" ]; then
         echo "Error: Failed to retrieve ECR repository URI."
@@ -73,7 +75,9 @@ fi
 # Step 3: Authenticate Docker
 if ! is_done "DOCKER_AUTHENTICATED"; then
     echo "Authenticating Docker with ECR..."
+
     aws ecr-public get-login-password --region us-east-1 --profile $AWS_PROFILE | docker login --username AWS --password-stdin $REPOSITORY_URI
+
     mark_done "DOCKER_AUTHENTICATED"
     echo "Docker authentication successful."
 else
@@ -83,8 +87,10 @@ fi
 # Step 4: Build and Push Docker Image
 if ! is_done "DOCKER_IMAGE_PUSHED"; then
     echo "Building and pushing Docker image..."
+
     docker build -t $REPOSITORY_URI:latest .
     docker push $REPOSITORY_URI:latest
+
     mark_done "DOCKER_IMAGE_PUSHED"
     echo "Docker image pushed successfully."
 else
@@ -94,7 +100,9 @@ fi
 # Step 5: Initialize Terraform
 if ! is_done "TERRAFORM_INIT"; then
     echo "Initializing Terraform..."
+
     terraform init
+
     mark_done "TERRAFORM_INIT"
     echo "Terraform initialized."
 else
@@ -102,14 +110,11 @@ else
 fi
 
 # Step 6: Apply Terraform Deployment
-if ! is_done "TERRAFORM_APPLIED"; then
-    echo "Applying Terraform deployment..."
-    terraform apply -var "image=$REPOSITORY_URI:latest" -var "email=$EMAIL" -var "db-creds=$DB_CREDS_SECRET_NAME" -auto-approve
-    mark_done "TERRAFORM_APPLIED"
-    echo "Terraform deployment applied successfully."
-else
-    echo "Skipping Terraform apply (already done)."
-fi
+echo "Applying Terraform deployment..."
+
+terraform apply -var "image=$REPOSITORY_URI:latest" -var "email=$EMAIL" -var "db-creds=$DB_CREDS_SECRET_NAME" -auto-approve
+
+echo "Terraform deployment applied successfully."
 
 
 echo "Deployment completed successfully!"

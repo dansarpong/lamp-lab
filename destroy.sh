@@ -19,10 +19,10 @@ is_done() {
 echo "Starting cleanup process..."
 
 # Set AWS credentials and variables if not already set (uncomment if needed)
-# AWS_PROFILE=<profile_name>
-# DB_CREDS_SECRET_NAME=<secret_name>
-# ECR_NAME=<ecr_name>
-# EMAIL=<email>
+# export AWS_PROFILE=<profile_name>
+# export DB_CREDS_SECRET_NAME=<secret_name>
+# export ECR_NAME=<ecr_name>
+# export EMAIL=<email>
 
 # Ensure status file exists
 if [ ! -f "$STATUS_FILE" ]; then
@@ -33,7 +33,9 @@ fi
 # Step 1: Destroy Terraform Resources
 if ! is_done "TERRAFORM_DESTROYED"; then
     echo "Destroying Terraform-managed resources..."
+
     terraform destroy -var "image=$REPOSITORY_URI:latest" -var "email=$EMAIL" -auto-approve
+
     mark_done "TERRAFORM_DESTROYED"
     echo "Terraform resources destroyed."
 else
@@ -43,10 +45,12 @@ fi
 # Step 2: Delete AWS Secrets Manager Secret
 if ! is_done "SECRET_DELETED"; then
     echo "Deleting AWS Secrets Manager secret..."
+
     aws secretsmanager delete-secret \
         --profile $AWS_PROFILE \
         --secret-id $DB_CREDS_SECRET_NAME \
         --force-delete-without-recovery
+
     mark_done "SECRET_DELETED"
     echo "Secret deleted."
 else
@@ -56,11 +60,13 @@ fi
 # Step 3: Delete ECR Repository
 if ! is_done "ECR_DELETED"; then
     echo "Deleting ECR repository..."
+
     aws ecr-public delete-repository \
         --profile $AWS_PROFILE \
         --region us-east-1 \
         --repository-name $ECR_NAME \
         --force
+
     mark_done "ECR_DELETED"
     echo "ECR repository deleted."
 else
@@ -68,4 +74,5 @@ else
 fi
 
 rm -f $STATUS_FILE
+
 echo "Cleanup completed successfully!"

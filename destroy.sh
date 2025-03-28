@@ -34,7 +34,7 @@ fi
 if ! is_done "TERRAFORM_DESTROYED"; then
     echo "Destroying Terraform-managed resources..."
 
-    terraform destroy -var "image=$REPOSITORY_URI:latest" -var "email=$EMAIL" -auto-approve
+    terraform destroy -var "image=$REPOSITORY_URI:latest" -var "email=$EMAIL" -var "db-creds=$DB_CREDS_SECRET_NAME" -auto-approve
 
     mark_done "TERRAFORM_DESTROYED"
     echo "Terraform resources destroyed."
